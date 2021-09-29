@@ -34,7 +34,7 @@ conn_SoldList = sqlite3.connect(f"{name_SoldList}.sqlite")
 cur_SoldList = conn_SoldList.cursor()
 
 name_WarningList = "WarningList"
-# id, name
+# id, name, quantity
 conn_WarningList = sqlite3.connect(f"{name_WarningList}.sqlite")
 cur_WarningList = conn_WarningList.cursor()
 
@@ -202,7 +202,8 @@ def add_category(artificially_create=False, artificial_name=None, artificial_db=
             db_list.append(db)
             cat_dict[name] = create_common_fun()
             print(cat_dict[name](name, db, artificially_created))
-            messagebox.showinfo(title="Category Added", message="Category has been add Successfully")
+            if not artificially_create:
+                messagebox.showinfo(title="Category Added", message="Category has been add Successfully")
         else:
             messagebox.showinfo(title="Category NOT Added", message="Category already EXISTS")
             print("Already in the List")
@@ -257,13 +258,12 @@ def undo():
         temporary = BufferListBox.get(index),
         value = temporary[0].split(" ", 1)[1],
         # print("Value = ", value[0])
-        item_details = \
-        cur_BufferList.execute("SELECT * FROM {} WHERE name=?".format(name_BufferList), (value[0],)).fetchall()[0]
+        item_details = cur_BufferList.execute("SELECT * FROM {} WHERE name=?"
+                                              .format(name_BufferList), (value[0],)).fetchall()[0]
         item_total, mode = item_details[2], item_details[5]
         # print(item_total, mode)
         cur_BufferList.execute("DELETE FROM {} WHERE name=?".format(name_BufferList), (value[0],))
         conn_BufferList.commit()
-        # print(cur_BufferList.execute("SELECT * FROM {} WHERE name=?".format(name_BufferList), (value[0], )).fetchall())
         buf_total -= item_total
         textBufTotal.set(buf_total)
         if mode == "Cash":
@@ -327,10 +327,22 @@ def add():
                 textTotalOnline.set(total_online)
             db_name = command_variables[item[6]].db_name
             print(db_name)
-            quan = command_variables[item[6]].cur.execute("SELECT quantity from {} where name=?".format(db_name), (item[1], )).fetchall()[0][0]
-            # print(quan)
-            print(quan)
+            quan = command_variables[item[6]].cur.execute("SELECT quantity from {} where name=?".format(db_name),
+                                                          (item[1],)).fetchall()[0][0]
+            if (quan - item[3]) < 0:
+                quan = 0
+            else:
+                quan -= item[3]
 
+            command_variables[item[6]].cur.execute("UPDATE {} SET quantity=? WHERE name=?".format(db_name),
+                                                   (quan, item[1]))
+            command_variables[item[6]].conn.commit()
+
+            if quan <= 2:
+                WarningBox.insert(tkinter.END, "{} - {}".format(item[1], quan))
+                cur_WarningList.execute("INSERT INTO {}(name, quantity) VALUES (?, ?)".format(name_WarningList),
+                                        (item[1], quan))
+                conn_WarningList.commit()
             SoldListBox.insert(tkinter.END, "{}. {}".format(soldListBox_length + 1, item[1]))
             soldListBox_length += 1
 
@@ -382,12 +394,34 @@ def check():
     print(details.get())
 
 
+def add_quantity():
+    pass
+
+
+def add_item():
+    pass
+
+
+def remove_item():
+    pass
+
+
+def save():
+    pass
+
+
+def clear():
+    pass
+
+
 mainWindow = tkinter.Tk()
 mainWindow.title("Sale")
 mainWindow.geometry("1366x768")
 mainWindow.columnconfigure(0, weight=2)
 mainWindow.columnconfigure(1, weight=2)
 mainWindow.columnconfigure(2, weight=2)
+# mainWindow.columnconfigure(, weight=2)
+mainWindow.columnconfigure(4, weight=2)
 
 mainWindow.rowconfigure(2, weight=2)
 mainWindow.rowconfigure(3, weight=1)
@@ -408,7 +442,7 @@ warningLabel = tkinter.Label(mainWindow, text="Warning List", font=("Comic Sans 
 bframe = tkinter.Frame(mainWindow)
 bframe.grid(row=2, column=0)
 # tkinter.Button(bframe, text="HI").grid(row=0, column=0)
-tkinter.Button(mainWindow, text="Add Category", command=add_category).grid(row=3, column=0, sticky='nsew')
+tkinter.Button(mainWindow, text="Add Category", command=add_category).grid(row=3, column=0, sticky='new')
 tkinter.Button(mainWindow, text="Remove Category", command=remove_category).grid(row=4, column=0, sticky='nsew')
 
 BufferListBox = Box(mainWindow)
@@ -511,6 +545,20 @@ textTotalAddedQuantity.set(0.0)
 textTotalAddedQuantity_cash.set(0.0)
 textTotalAddedQuantity_online.set(0.0)
 
+extraButtons = tkinter.Frame(mainWindow)
+extraButtons.grid(row=3, column=3, sticky='nsew', rowspan=2, columnspan=2, padx=(30, 0))
+tkinter.Label(extraButtons, text="Extra Features", font=("Comic Sans MS", 12, "bold"), width=15, bg="#b7d477") \
+    .grid(row=0, column=0)
+tkinter.Button(extraButtons, text="Add Quantity", command=add_quantity, width=15, font=("Comic Sans MS", 10, 'italic'),
+               bg="#e5acf1").grid(row=1, column=0, pady=(5, 0))
+tkinter.Button(extraButtons, text="Add Item", command=add_item, font=("Comic Sans MS", 10, 'italic'), width=15,
+               bg="#e5acf1").grid(row=2, column=0, pady=(5, 0))
+tkinter.Button(extraButtons, text="Remove Item", command=remove_item, font=("Comic Sans MS", 10, 'italic'),
+               width=15, bg="#e5acf1").grid(row=3, column=0, pady=(5, 10))
+tkinter.Button(extraButtons, text="Save Sold List", command=save, font=("Comic Sans MS", 10, 'italic'), width=15,
+               bg="#e5acf1").grid(row=1, column=1, pady=(5, 0))
+tkinter.Button(extraButtons, text="Clear Sold List", command=clear, font=("Comic Sans MS", 10, 'italic'), width=15,
+               bg="#e5acf1").grid(row=2, column=1, pady=(5, 0))
 cur_category.execute("SELECT * FROM {}".format(name_category_db))
 temp = cur_category.fetchall()
 if temp:
@@ -549,5 +597,6 @@ temp = cur_WarningList.execute("SELECT * FROM {}".format(name_WarningList)).fetc
 if temp:
     for item in temp:
         WarningBox.insert(tkinter.END, "{}. {}".format(temp.index(item) + 1, item[1]))
+
 
 mainWindow.mainloop()
