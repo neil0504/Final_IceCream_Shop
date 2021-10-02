@@ -3,10 +3,13 @@ import sqlite3
 import tkinter
 from tkinter import messagebox
 
+# TODO: Check if the table exists in the DB
 cat_list = []
 db_list = []
 cat_dict = {}
+button_dict = {}
 command_variables = {}
+command_variables_inAddQuantity = {}
 r = 1
 value2 = None
 index_bufferListBox = None
@@ -19,7 +22,15 @@ total = 0
 total_cash = 0
 total_online = 0
 
+total_AddedQuantity = 0
+total_AddedQuantity_cash = 0
+total_AddedQuantity_online = 0
+
+# for IceCream DB
+# id, name, quantity, price
+
 name_category_db = "Category_List"
+# id, name, cat_name...........name = name of DB
 conn_category = sqlite3.connect(f"{name_category_db}.sqlite")
 cur_category = conn_category.cursor()
 
@@ -37,6 +48,11 @@ name_WarningList = "WarningList"
 # id, name, quantity
 conn_WarningList = sqlite3.connect(f"{name_WarningList}.sqlite")
 cur_WarningList = conn_WarningList.cursor()
+
+name_AddedQuantityList = "AddedQuantityList"
+# id, name, total, quantity, price, mode
+conn_AddedQuantityList = sqlite3.connect("AddedQuantityList.sqlite")
+cur_AddedQuantityList = conn_AddedQuantityList.cursor()
 
 
 def on_select1(event):
@@ -68,11 +84,11 @@ class CreateButtonFunction:
             self.conn = sqlite3.connect(f"{db}.sqlite")
             self.cur = self.conn.cursor()
             self.value = None
+            self.value_add_quantity = None
 
             if not artificially_created:
                 cur_category.execute(f"INSERT INTO {name_category_db} (name, cat_name) VALUES(?, ?)", (db, name))
-                c = cur_category.connection
-                c.commit()
+                conn_category.commit()
 
         else:
             print("Not Present")
@@ -80,9 +96,8 @@ class CreateButtonFunction:
 
     def onSelect(self, event):
         box = event.widget
-        index_listBox = int(self.list_box.curselection()[0])
+        index_listBox = int(box.curselection()[0])
         temporary = box.get(index_listBox),
-        # t = box.get(index_1),
         self.value = temporary[0].split(" ", 1)[1],
 
     def b(self):
@@ -91,10 +106,10 @@ class CreateButtonFunction:
             global buf_total, buf_total_cash, buf_total_online
             if self.value is not None:
                 if self.value[0] not in BufferListBox.get(0, tkinter.END):
-                    if self.quantity != "":
+                    if quantity != "":
                         try:
-                            q = int(self.quantity.get())
-                            price = self.cur.execute("SELECT price from {} where name=?".format(self.name),
+                            q = int(quantity.get())
+                            price = self.cur.execute("SELECT price from {} where name=?".format(self.db_name),
                                                      (self.value[0],)).fetchall()[0][0]
                             t = q * price
                             buf_total += t
@@ -114,7 +129,7 @@ class CreateButtonFunction:
                             id_ = len(cur_BufferList.execute("SELECT * FROM {}".format(name_BufferList)).fetchall())
                             BufferListBox.insert(tkinter.END, "{}. {}".format(id_, self.value[0]))
                             textBufTotal.set(buf_total)
-                            self.quantity.set("")
+                            quantity.set("")
                             self.value = None
 
                         except ValueError:
@@ -126,39 +141,223 @@ class CreateButtonFunction:
         def cash():
             common("Cash")
 
-        self.window = tkinter.Tk()
-        self.quantity = tkinter.StringVar(self.window)
-        self.list_box = Box(self.window)
-        self.window.geometry("500x768")
-        self.window.title(self.name)
-        self.window.columnconfigure(0, weight=2)
-        self.window.rowconfigure(1, weight=2)
-        tkinter.Label(self.window, text="Items List", font=("Comic Sans MS", 14, "bold"), bg="#b7d477") \
+        window = tkinter.Tk()
+        quantity = tkinter.StringVar(window)
+        list_box = Box(window)
+        window.geometry("500x768")
+        window.title(self.name)
+        window.columnconfigure(0, weight=2)
+        window.rowconfigure(1, weight=2)
+        tkinter.Label(window, text="Items List", font=("Comic Sans MS", 14, "bold"), bg="#b7d477") \
             .grid(row=0, column=0, sticky='nsew', padx=(30, 0))
-        self.list_box.grid(row=1, column=0, sticky='nsew', padx=(30, 0), pady=(0, 30))
-        self.list_box.bind('<<ListboxSelect>>', self.onSelect)
-        self.cur.execute("SELECT * FROM {}".format(self.name))
+        list_box.grid(row=1, column=0, sticky='nsew', padx=(30, 0), pady=(0, 30))
+        list_box.bind('<<ListboxSelect>>', self.onSelect)
+        self.cur.execute("SELECT * FROM {}".format(self.db_name))
         items = self.cur.fetchall()
         count = 1
         for item in items:
-            self.list_box.insert(tkinter.END, "{}. {}".format(count, item[1]))
+            list_box.insert(tkinter.END, "{}. {}".format(count, item[1]))
             count += 1
-        self.ef = tkinter.Frame(self.window)
-        self.ef.grid(row=2, column=0)
-        tkinter.Label(self.ef, text="Quantity: ", font=("Comic Sans MS", 12, 'italic'), bg="#84c2e7", width=7
+        ef = tkinter.Frame(window)
+        ef.grid(row=2, column=0)
+        tkinter.Label(ef, text="Quantity: ", font=("Comic Sans MS", 12, 'italic'), bg="#84c2e7", width=7
                       , anchor="w"). \
             grid(row=0, column=0, sticky='nsw', padx=(30, 0))
-        quantity_entry = tkinter.Entry(self.ef, textvariable=self.quantity)
+        quantity_entry = tkinter.Entry(ef, textvariable=quantity)
         quantity_entry.grid(row=0, column=1, sticky='nsw', padx=(3, 0))
-        self.buttonFrame = tkinter.Frame(self.window)
-        self.buttonFrame.grid(row=3, column=0, sticky='nsew')
-        tkinter.Button(self.buttonFrame, text="Online Payment", command=onlinePay_,
+        buffonFrame = tkinter.Frame(window)
+        buffonFrame.grid(row=3, column=0, sticky='nsew')
+        tkinter.Button(buffonFrame, text="Online Payment", command=onlinePay_,
                        font=("Comic Sans MS", 12, 'italic'),
                        bg="#e5acf1").grid(row=0, column=0, sticky='nsew', padx=(30, 0), pady=(15, 10))
-        tkinter.Button(self.buttonFrame, text="Cash Payment", command=cash, font=("Comic Sans MS", 12, 'italic'),
+        tkinter.Button(buffonFrame, text="Cash Payment", command=cash, font=("Comic Sans MS", 12, 'italic'),
                        bg="#e5acf1") \
             .grid(row=0, column=1, sticky='nsew', padx=(20, 0), pady=(15, 10))
-        self.window.mainloop()
+        window.mainloop()
+
+    def addQuantity(self):
+        def onSelect_add_quantity(event):
+            box = event.widget
+            index_listBox = int(box.curselection()[0])
+            temporary = box.get(index_listBox),
+            self.value_add_quantity = temporary[0].split(" ", 1)[1],
+
+            if self.value_add_quantity[0] == "Additional Expenses":
+                qLabel.grid_forget()
+                quantityEntry.grid_forget()
+                reasonLabel.grid(row=2, column=0, sticky='nsw')
+                reasonEntry.grid(row=2, column=1, sticky='nsw', padx=(3, 0))
+            else:
+                reasonLabel.grid_forget()
+                reasonEntry.grid_forget()
+                qLabel.grid(row=0, column=0, sticky='nsw')
+                quantityEntry.grid(row=0, column=1, sticky='nsw', padx=(3, 0))
+
+        def add_item_online():
+            common("Online")
+
+        def add_item_cash():
+            common("Cash")
+
+        def common(mode):
+            global total_AddedQuantity, total_AddedQuantity_cash, total_AddedQuantity_online
+            if self.value_add_quantity[0] is not None:
+                if self.value_add_quantity[0] == "Additional Expenses":
+                    if price.get() != "" and reason.get() != "":
+                        try:
+                            pr = float(price.get())
+                            name = reason.get()
+                            name = "Additional Expenses: " + name
+                            total_AddedQuantity += pr
+                            textTotalAddedQuantity.set(total_AddedQuantity)
+                            if mode == "Cash":
+                                total_AddedQuantity_cash += pr
+                                textTotalAddedQuantity_cash.set(total_AddedQuantity_cash)
+                            elif mode == "Online":
+                                total_AddedQuantity_online += pr
+                                textTotalAddedQuantity_online.set(total_AddedQuantity_online)
+                            # id, name, total, quantity, price, mode
+                            cur_AddedQuantityList.execute("INSERT INTO {} (name, total, quantity, price, mode) VALUES "
+                                                          "(?, ?, ?, ?, ?)".format(name_AddedQuantityList), (name,
+                                                                                                             pr, 1,
+                                                                                                             pr,
+                                                                                                             f"{mode}_AddedQuantity"))
+                            price.set("")
+                            reason.set("")
+                            self.value_add_quantity = None
+                            messagebox.showinfo(title="Addition Successful", message="Additional Expenses added successfully")
+                        except ValueError:
+                            messagebox.showinfo(title="Enter price correctly as number", message="Price should be a number")
+                            price.set("")
+                    else:
+                        messagebox.showinfo(title="Price or Reason not filled", message="Price and Reason fields are "
+                                                                                        "compulsory.")
+                else:
+                    if quantity.get() != "" and price.get() != "":
+                        try:
+                            quan = int(quantity.get())
+                            pr = float(price.get())
+                            if quan >= 0:
+                                total_AddedQuantity += pr
+                                textTotalAddedQuantity.set(total_AddedQuantity)
+                                if mode == "Cash":
+                                    total_AddedQuantity_cash += pr
+                                    textTotalAddedQuantity_cash.set(total_AddedQuantity_cash)
+                                elif mode == "Online":
+                                    total_AddedQuantity_online += pr
+                                    textTotalAddedQuantity_online.set(total_AddedQuantity_online)
+                                # for IceCream DB
+                                # id, name, quantity, price
+                                existing_quantity = self.cur.execute("SELECT quantity from {}".format(self.db_name)).fetchall()[0][0]
+
+                                print("Existing Quantity = ", existing_quantity)
+                                new_quantity = existing_quantity + quan
+
+                                WarningBox_contents = cur_WarningList.execute("SELECT name from {}".format(name_WarningList)).fetchall()
+                                inWarningList = False
+                                for i in WarningBox_contents:
+                                    if i[0] == self.value_add_quantity[0]:
+                                        inWarningList = True
+                                print(inWarningList)
+                                if new_quantity >= 2 and inWarningList:
+                                    cur_WarningList.execute("DELETE FROM {} WHERE name=?".format(name_WarningList), (self.value_add_quantity[0], ))
+                                    conn_WarningList.commit()
+                                    for i in WarningBox.get(0, tkinter.END):
+                                        if self.value_add_quantity[0] in i:
+                                            index = WarningBox.get(0, tkinter.END).index(i)
+                                            WarningBox.delete(index)
+                                            print("Item Deleted from Warning List")
+                                # TODO: Rearrange the Warning List after Deletion so that there is proper ID for Every item in Warning List
+                                print("New Quantity = ", new_quantity)
+                                # TODO : Also update the warning List so that when the restart happens the quantity in
+                                #  warning list is also updated one
+                                self.cur.execute("UPDATE {} SET quantity=? WHERE name=?".format(self.db_name), (new_quantity, self.value_add_quantity[0]))
+                                self.conn.commit()
+                                quantityBox.delete(0, tkinter.END)
+                                all_items = self.cur.execute("SELECT * FROM {}".format(self.db_name)).fetchall()
+                                c = 2
+                                quantityBox.insert(tkinter.END, "1. Additional Expenses - None")
+                                for i in all_items:
+                                    quantityBox.insert(tkinter.END, "{}. {} - {}".format(c, i[1], i[2]))
+                                    c += 1
+                                price.set("")
+                                quantity.set("")
+                                messagebox.showinfo(title="Add Quantity", message="Quantity added successfully")
+                            else:
+                                messagebox.showinfo(title="Quantity Value", message="Quantity Should be 0 or greater "
+                                                                                    "than zero")
+                                quantity.set("")
+
+                        except ValueError:
+                            messagebox.showinfo(title="Enter price and Quantity correctly as number"
+                                                , message="Price and Quantity should be a number")
+                            price.set("")
+                            quantity.set("")
+
+                    else:
+                        messagebox.showinfo(title="Price or Quantity not filled", message="Price and Quantity fields "
+                                                                                          "are compulsory.")
+            else:
+                messagebox.showinfo(title="Item not Selected", message="Select Item from list to which u need to add "
+                                                                       "quantity")
+
+        window = tkinter.Tk()
+        list_box = Box(window)
+        quantityBox = Box(window)
+        window.geometry("768x768")
+        window.title("ADD QUANTITY FOR {}".format(self.name))
+        window.columnconfigure(0, weight=2)
+        window.columnconfigure(1, weight=2)
+        window.rowconfigure(2, weight=2)
+        tkinter.Label(window, text="ADD QUANLITY", font=("Comic Sans MS", 20, "bold"), bg="#ade1ef") \
+            .grid(row=0, column=0, columnspan=4, sticky='nsew', padx=30)
+        tkinter.Label(window, text="Items List", font=("Comic Sans MS", 14, "bold"), bg="#b7d477") \
+            .grid(row=1, column=0, sticky='nsew', padx=(30, 0))
+        list_box.grid(row=2, column=0, sticky='nsew', padx=(30, 0), pady=(0, 30))
+        list_box.config(border=2, relief='sunken')
+        list_box.bind('<<ListboxSelect>>', onSelect_add_quantity)
+        quantityBox.grid(row=2, column=1, sticky='nsew', padx=(30, 0), pady=(0, 30))
+        quantityBox.config(border=2, relief='sunken')
+
+        self.cur.execute("SELECT * FROM {}".format(self.db_name))
+        items = self.cur.fetchall()
+        list_box.insert(tkinter.END, "{}. {}".format(1, "Additional Expenses"))
+        quantityBox.insert(tkinter.END, "{}. {}".format(1, "Additional Expenses - None"))
+        count = 2
+        for item in items:
+            list_box.insert(tkinter.END, "{}. {}".format(count, item[1]))
+            quantityBox.insert(tkinter.END, "{}. {} - {}".format(count, item[1], item[2]))
+            count += 1
+        eFrame = tkinter.Frame(window)
+        price = tkinter.StringVar(window)
+        quantity = tkinter.StringVar(window)
+        reason = tkinter.StringVar(window)
+        eFrame.grid(row=3, column=0, sticky='nsew', padx=(30, 0))
+
+        qLabel = tkinter.Label(eFrame, text="Quantity: ", font=("Comic Sans MS", 12, 'italic'), bg="#84c2e7",
+                               width=7, anchor="w")
+        qLabel.grid(row=0, column=0, sticky='nsw')
+        quantityEntry = tkinter.Entry(eFrame, textvariable=quantity)
+        quantityEntry.grid(row=0, column=1, sticky='nsw', padx=(3, 0))
+
+        reasonLabel = tkinter.Label(eFrame, text="Reason: ", font=("Comic Sans MS", 12, 'italic'), bg="#84c2e7",
+                                    width=7, anchor="w")
+        reasonEntry = tkinter.Entry(eFrame, textvariable=reason)
+
+        tkinter.Label(eFrame, text="Price: ", font=("Comic Sans MS", 12, 'italic'), bg="#84c2e7", width=7, anchor="w") \
+            .grid(row=1, column=0, sticky='nsw', pady=(10, 0))
+        priceEntry = tkinter.Entry(eFrame, textvariable=price)
+        priceEntry.grid(row=1, column=1, sticky='nsw', padx=(3, 0), pady=(10, 0))
+
+        bf = tkinter.Frame(window)
+        bf.grid(row=4, column=0, padx=(30, 0))
+        b1 = tkinter.Button(bf, text="Online Payment", command=add_item_online, font=("Comic Sans MS", 12, 'italic', 'bold')
+                            , bg="#e5acf1", width=12)
+        b1.grid(row=0, column=0, sticky='nsw', pady=(15, 0))
+        b2 = tkinter.Button(bf, text="Cash Payment", command=add_item_cash, font=("Comic Sans MS", 12, 'italic', 'bold')
+                            , bg="#e5acf1", width=12)
+        b2.grid(row=0, column=1, sticky='nsw', padx=(10, 10), pady=(15, 0))
+        window.mainloop()
 
 
 def refill_BufferListBox():
@@ -183,7 +382,18 @@ def create_common_fun():
     return template
 
 
-def add_category(artificially_create=False, artificial_name=None, artificial_db=None):
+def create_common_fun_for_AddQuantity(name, db, row, frame):
+    def template():
+        # r_ow = 1
+        value = f"{name}_Button"
+        command_variables_inAddQuantity[value] = CreateButtonFunction(name, db, True)
+        tkinter.Button(frame, text=name, command=command_variables_inAddQuantity[value].addQuantity).grid(row=row, column=0)
+        # r_ow += 1
+
+    return template
+
+
+def add_category(artificially_create=False, artificial_db=None, artificial_name=None):
     def add_cat(n=None, db=None):
         if not artificially_create:
             if cat_name.get() != "" and cat_database.get() != "":
@@ -193,7 +403,7 @@ def add_category(artificially_create=False, artificial_name=None, artificial_db=
                 cat_name.set("")
                 cat_database.set("")
                 window.destroy()
-        elif n is not None and db is not None:
+        elif n is not None and db is not None and artificially_create:
             hey(n, db, artificially_create)
 
     def hey(name, db, artificially_created):
@@ -226,22 +436,35 @@ def add_category(artificially_create=False, artificial_name=None, artificial_db=
 def remove_category():
     def remove():
         if cat_name.get() != "":
-            cur_category.execute("SELECT cat_name FROM {}".format(name_category_db))
-            all_items = cur_category.fetchall()
             name = cat_name.get()
-            # print(all_items)
-            # Getting a tuple because all item has the list with all names as  tuple eg: [('IceCream',), ('Ballons',)]
-            t = name,
-            if t in all_items:
-                cur_category.execute("DELETE  FROM {} WHERE cat_name=?".format(name_category_db), (t[0],))
-                c = cur_category.connection
-                c.commit()
-                messagebox.showinfo(title="Remove Category", message="Category has been Removed Successfully")
-                response = messagebox.showinfo(title="RESTART", message="RESTART TO CONTINUE")
-                # if response == "ok":
-                #     os.execl(sys.executable, sys.executable, *sys.argv)
+
+            all_items = cur_category.execute("SELECT cat_name FROM {} WHERE cat_name=?".format(name_category_db), (name, )).fetchall()
+            if all_items:
+                t = name,
+                 # = cur_category.fetchall()
+
+                for i in cat_dict:
+                    print(i)
+                # print(all_items)
+                # Getting a tuple because all item has the list with all names as  tuple eg: [('IceCream',), ('Ballons',)]
+
+                if t in all_items:
+                    cur_category.execute("DELETE  FROM {} WHERE cat_name=?".format(name_category_db), (t[0],))
+                    del cat_dict[name]
+                    c = cur_category.connection
+                    c.commit()
+                    messagebox.showinfo(title="Remove Category", message="Category has been Removed Successfully")
+                    response = messagebox.showinfo(title="RESTART", message="RESTART TO CONTINUE")
+                    # if response == "ok":
+                    #     os.execl(sys.executable, sys.executable, *sys.argv)
+                    for i in cat_dict:
+                        print(i)
+                else:
+                    messagebox.showinfo(title="Remove Category FAILED", message="Category has not been Removed")
+
             else:
-                messagebox.showinfo(title="Remove Category FAILED", message="Category has not been Removed")
+                print("Category Does not Exist")
+                # TODO: Add a messageBox here
 
     window = tkinter.Tk()
     window.title("Remove Category")
@@ -281,7 +504,7 @@ def add():
     price = None
     if discount.get() != "":
         if discount.get().isnumeric():
-            price = int(discount.get())
+            price = float(discount.get())
             percentage = (price * 100) / buf_total
             details.set("{:.2f} % or ₹ {:.2f}".format(percentage, price))
         else:
@@ -299,7 +522,7 @@ def add():
 
             if not wrong:
                 if numS != "":
-                    d = int(numS)
+                    d = float(numS)
                     price = (d * buf_total) / 100
                     details.set(f"{d} % or ₹ {price}")
 
@@ -339,7 +562,8 @@ def add():
             command_variables[item[6]].conn.commit()
 
             if quan <= 2:
-                WarningBox.insert(tkinter.END, "{} - {}".format(item[1], quan))
+                length = len(WarningBox.get(0, tkinter.END))
+                WarningBox.insert(tkinter.END, "{}. {} - {}".format(length+1, item[1], quan))
                 cur_WarningList.execute("INSERT INTO {}(name, quantity) VALUES (?, ?)".format(name_WarningList),
                                         (item[1], quan))
                 conn_WarningList.commit()
@@ -365,7 +589,7 @@ def check():
     l2.grid(row=3, column=1, pady=(15, 0), sticky='w')
     if discount.get() != "":
         if discount.get().isnumeric():
-            d = int(discount.get())
+            d = float(discount.get())
             percentage = (d * 100) / buf_total
             details.set("{:.2f} % or ₹ {:.2f}".format(percentage, d))
         else:
@@ -381,9 +605,9 @@ def check():
                     break
 
             if not wrong:
-                print(numS)
+                # print(numS)
                 if numS != "":
-                    d = int(numS)
+                    d = float(numS)
                     price = (d * buf_total) / 100
                     details.set(f"{d} % or ₹ {price}")
 
@@ -391,11 +615,23 @@ def check():
         details.set("0 % or ₹ 0")
 
     # details.set("HEY")
-    print(details.get())
+    # print(details.get())
 
 
 def add_quantity():
-    pass
+    window = tkinter.Tk()
+    window.geometry("500x768")
+    window.title("Select Category to add Quantity to")
+    tkinter.Label(window, text="SELECT CATEGORY TO ADD QUANTITY TO: ").grid(row=0, column=0, sticky='nsew')
+
+    all_cat = cur_category.execute("SELECT * FROM {}".format(name_category_db)).fetchall()
+    r = 1
+    for cat in all_cat:
+        name = cat[2]
+        db_name = cat[1]
+        button_dict[name] = create_common_fun_for_AddQuantity(name, db_name, r, window)
+        button_dict[name]()
+        r += 1
 
 
 def add_item():
@@ -559,6 +795,7 @@ tkinter.Button(extraButtons, text="Save Sold List", command=save, font=("Comic S
                bg="#e5acf1").grid(row=1, column=1, pady=(5, 0))
 tkinter.Button(extraButtons, text="Clear Sold List", command=clear, font=("Comic Sans MS", 10, 'italic'), width=15,
                bg="#e5acf1").grid(row=2, column=1, pady=(5, 0))
+
 cur_category.execute("SELECT * FROM {}".format(name_category_db))
 temp = cur_category.fetchall()
 if temp:
@@ -596,7 +833,7 @@ if temp:
 temp = cur_WarningList.execute("SELECT * FROM {}".format(name_WarningList)).fetchall()
 if temp:
     for item in temp:
-        WarningBox.insert(tkinter.END, "{}. {}".format(temp.index(item) + 1, item[1]))
+        WarningBox.insert(tkinter.END, "{}. {} - {}".format(temp.index(item) + 1, item[1], item[2]))
 
 
 mainWindow.mainloop()
